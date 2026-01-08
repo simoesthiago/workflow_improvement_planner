@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "workflow-improvement-planner"
+version = "0.1.0"
+description = "Local Streamlit app to plan workflow improvements with a fixed agentic pipeline."
+authors = []
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+streamlit = "^1.41.0"
+python-dotenv = "^1.0.1"
+
+# Planned dependencies (used in later sprints)
+langchain-openai = "^0.3.0"
+langgraph = "^0.2.0"
+tavily-python = "^0.5.0"
+pydantic = "^2.10.0"
+pypdf = "^5.1.0"
+
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"

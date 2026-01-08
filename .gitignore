@@ -1,0 +1,19 @@
+/.env
+/.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.DS_Store
+
+# App data (local-only)
+/data/
+
+# Build artifacts
+/dist/
+/build/
+*.egg-info/
