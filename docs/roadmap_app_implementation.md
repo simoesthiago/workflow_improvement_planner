@@ -200,14 +200,14 @@ Goal: produce final artifacts, make the app stable for real use, and document it
 - Export history list per case.
 
 **Work**
-- [ ] Implement export pack writer:
+- [x] Implement export pack writer:
   - `write_export_pack(case_id, export_ts, files)` → `exports/<ts>/...`
   - `make_export_zip(export_dir)` → bytes for `st.download_button`
-- [ ] Create deterministic templates:
+- [x] Create deterministic templates:
   - `Executive_Brief.md` (from Solution)
   - `Technical_Blueprint.md` (from Prototype)
   - `Implementation_Plan.md` (consolidated: phases, risks, KPIs)
-- [ ] Streamlit “Export Pack” tab:
+- [x] Streamlit “Export Pack” tab:
   - generate export from latest outputs
   - list older exports and allow download
 
@@ -222,15 +222,15 @@ Goal: produce final artifacts, make the app stable for real use, and document it
 - 1–2 sample cases for demo (optional but recommended).
 
 **Work**
-- [ ] UX:
+- [x] UX:
   - spinners/progress during runs
   - clear errors when keys are missing or calls fail
   - disable buttons when prerequisites are missing (no case selected, no assessment, etc.)
-- [ ] Guardrails:
+- [x] Guardrails:
   - enforce `MAX_CONTEXT_CHARS`
   - handle large attachments gracefully
   - protect against partial writes (atomic JSON writes everywhere)
-- [ ] Docs:
+- [x] Docs:
   - README: install, configure `.env`, run app, how data is stored, limitations
   - add screenshots placeholders (or instructions to capture them)
 - [ ] QA:

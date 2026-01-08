@@ -490,6 +490,25 @@ def make_export_zip(export_dir: str) -> str:
     return str(zip_path)
 
 
+def list_exports(case_id: str) -> list[dict]:
+    exports_dir = case_dir(case_id) / "exports"
+    if not exports_dir.exists():
+        return []
+    items: list[dict] = []
+    for path in sorted(exports_dir.iterdir(), reverse=True):
+        if path.is_dir():
+            zip_path = path.with_suffix(".zip")
+            items.append(
+                {
+                    "export_ts": path.name,
+                    "dir": str(path),
+                    "zip": str(zip_path) if zip_path.exists() else None,
+                    "files": sorted([str(p) for p in path.glob("*.md")]),
+                }
+            )
+    return items
+
+
 # ---- Tools for agents / workflow ----
 
 

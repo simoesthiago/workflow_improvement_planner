@@ -456,7 +456,12 @@ def main() -> None:
                 st.write("Latest Solution Designer output:")
                 st.markdown(latest_solution)
 
-            if st.button("Run Solution Designer", type="primary"):
+            if not status["OPENAI_API_KEY"]:
+                st.error("OPENAI_API_KEY not set. Add it to your .env to run.")
+
+            run_disabled = not status["OPENAI_API_KEY"]
+
+            if st.button("Run Solution Designer", type="primary", disabled=run_disabled):
                 with st.spinner("Running Solution Designer..."):
                     md, meta = run_solution_designer(
                         selected_case_id, max_chars=int(os.getenv("MAX_CONTEXT_CHARS", "60000"))
@@ -479,7 +484,12 @@ def main() -> None:
                 st.write("Latest Prototype Builder output:")
                 st.markdown(latest_prototype)
 
-            if st.button("Run Prototype Builder", type="primary"):
+            if not status["OPENAI_API_KEY"]:
+                st.error("OPENAI_API_KEY not set. Add it to your .env to run.")
+
+            run_disabled = not status["OPENAI_API_KEY"]
+
+            if st.button("Run Prototype Builder", type="primary", disabled=run_disabled):
                 solution_md = utils.load_latest_output(selected_case_id, "solution_designer")
                 with st.spinner("Running Prototype Builder..."):
                     md, meta = run_prototype_builder(
@@ -500,14 +510,76 @@ def main() -> None:
         if not selected_case_id:
             st.info("Select or create a case in the sidebar to begin.")
         else:
-            st.warning("Not implemented yet. Follow docs/roadmap_app_implementation.md (Phase 4).")
+            solution_md = utils.load_latest_output(selected_case_id, "solution_designer")
+            prototype_md = utils.load_latest_output(selected_case_id, "prototype_builder")
+
+            if not solution_md or not prototype_md:
+                st.warning("Run Solution Designer and Prototype Builder before exporting.")
+
+            def build_export_files(solution_text: str | None, prototype_text: str | None) -> dict[str, str]:
+                sol = solution_text or "Solution Designer output not available."
+                proto = prototype_text or "Prototype Builder output not available."
+                executive = "# Executive Brief\n\n" + sol
+                technical = "# Technical Blueprint\n\n" + proto
+                implementation = "# Implementation Plan\n\n" + "\n".join(
+                    [
+                        "## Phases",
+                        "- Phase 1: Stand up the fixed workflow (LangGraph) and case manager.",
+                        "- Phase 2: Assessment ingestion and context building.",
+                        "- Phase 3: Agents with web_search guardrails and reproducible outputs.",
+                        "- Phase 4: Export pack and release hardening.",
+                        "",
+                        "## Risks and mitigations",
+                        "- LLM variability: use fixed prompts/headings and low temperature.",
+                        "- Context limits: enforce MAX_CONTEXT_CHARS and warn on truncation.",
+                        "- Web search availability: log failures and allow offline runs.",
+                    ]
+                )
+                return {
+                    "Executive_Brief.md": executive,
+                    "Technical_Blueprint.md": technical,
+                    "Implementation_Plan.md": implementation,
+                }
+
+            if st.button("Generate Export Pack", type="primary", disabled=not (solution_md and prototype_md)):
+                ts = utils.utc_now_iso().replace(":", "-")
+                files = build_export_files(solution_md, prototype_md)
+                export_dir = utils.write_export_pack(selected_case_id, ts, files)
+                zip_path = utils.make_export_zip(export_dir)
+                st.success(f"Export generated: {export_dir}")
+                with open(zip_path, "rb") as f:
+                    st.download_button(
+                        "Download latest export ZIP",
+                        data=f.read(),
+                        file_name=Path(zip_path).name,
+                        mime="application/zip",
+                    )
+
+            exports = utils.list_exports(selected_case_id)
+            if exports:
+                st.write("Previous exports:")
+                for item in exports:
+                    st.markdown(f"- {item['export_ts']}")
+                    for md_file in item["files"]:
+                        st.markdown(f"  - {Path(md_file).name}")
+                    if item.get("zip"):
+                        with open(item["zip"], "rb") as f:
+                            st.download_button(
+                                f"Download {Path(item['zip']).name}",
+                                data=f.read(),
+                                file_name=Path(item["zip"]).name,
+                                mime="application/zip",
+                                key=f"zip-{item['export_ts']}",
+                            )
+            else:
+                st.info("No exports yet.")
 
     st.divider()
     st.subheader("Run full workflow (LangGraph)")
     if not selected_case_id:
         st.info("Select or create a case to run the workflow.")
     else:
-        if st.button("Run Workflow (load -> solution -> prototype)", type="secondary"):
+        if st.button("Run Workflow (load -> solution -> prototype)", type="secondary", disabled=not status["OPENAI_API_KEY"]):
             with st.spinner("Running fixed workflow..."):
                 graph = build_graph()
                 app = graph.compile()
