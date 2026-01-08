@@ -51,12 +51,12 @@ Goal: create a runnable project skeleton with a stable local storage layer.
 - `workflow_planner.py` launches Streamlit and renders the planned tabs (placeholders).
 
 **Work**
-- [ ] Initialize Poetry project (pin Python version).
-- [ ] Add deps: `streamlit`, `langchain-openai`, `langgraph`, `python-dotenv`, `tavily-python`, plus PDF extractor (e.g., `pypdf`).
-- [ ] Add `.env.example` with `OPENAI_API_KEY`, `OPENAI_MODEL`, `TAVILY_API_KEY`, and optional limits.
-- [ ] Add `.gitignore` (at minimum: `data/`, `.env`, `.venv/`, `__pycache__/`).
-- [ ] Implement config loader (dotenv + environment validation).
-- [ ] Create Streamlit app skeleton:
+- [x] Initialize Poetry project (pin Python version).
+- [x] Add deps: `streamlit`, `langchain-openai`, `langgraph`, `python-dotenv`, `tavily-python`, plus PDF extractor (e.g., `pypdf`).
+- [x] Add `.env.example` with `OPENAI_API_KEY`, `OPENAI_MODEL`, `TAVILY_API_KEY`, and optional limits.
+- [x] Add `.gitignore` (at minimum: `data/`, `.env`, `.venv/`, `__pycache__/`).
+- [x] Implement config loader (dotenv + environment validation).
+- [x] Create Streamlit app skeleton:
   - Sidebar: case selector placeholder + buttons (disabled)
   - Tabs: Assessment, Solution, Prototype, Export, History/Sources (optional)
 
@@ -70,12 +70,12 @@ Goal: create a runnable project skeleton with a stable local storage layer.
 - Streamlit sidebar can create/open/delete cases and shows `case_id` + timestamps.
 
 **Work**
-- [ ] Implement case store in `utils.py`:
+- [x] Implement case store in `utils.py`:
   - `list_cases`, `create_case`, `load_case_meta`, `delete_case`, `update_case_updated_at`
   - `data/index.json` as the global index
   - per-case folder: `attachments/`, `attachments_text/`, `outputs/`, `runs/`, `sources/`, `exports/`, `logs/`
-- [ ] Add safe file writes (atomic write pattern for JSON).
-- [ ] Wire Streamlit sidebar:
+- [x] Add safe file writes (atomic write pattern for JSON).
+- [x] Wire Streamlit sidebar:
   - Create case (name/area/tags/description)
   - Open/select case
   - Delete with confirmation
@@ -96,11 +96,11 @@ Goal: reliably capture the assessment + attachments and build deterministic cont
 - Snapshot versioning on save.
 
 **Work**
-- [ ] Implement form fields per PRD (minimum set).
-- [ ] Implement assessment persistence in `utils.py`:
+- [x] Implement form fields per PRD (minimum set).
+- [x] Implement assessment persistence in `utils.py`:
   - `save_assessment`, `load_assessment`, `save_assessment_snapshot`
-- [ ] Streamlit: “Save Assessment” writes `assessment.json` + snapshot.
-- [ ] Display last saved time and a small “assessment completeness” indicator (optional).
+- [x] Streamlit: “Save Assessment” writes `assessment.json` + snapshot.
+- [x] Display last saved time and a small “assessment completeness” indicator (optional).
 
 **Acceptance criteria**
 - Reopening a case restores the form values from disk.
@@ -113,16 +113,16 @@ Goal: reliably capture the assessment + attachments and build deterministic cont
 - Deterministic `context.txt` rebuild with max length + warnings.
 
 **Work**
-- [ ] Implement `save_attachment` and store attachment metadata (filename, size, uploaded_at).
-- [ ] Implement `extract_text_from_attachment`:
+- [x] Implement `save_attachment` and store attachment metadata (filename, size, uploaded_at).
+- [x] Implement `extract_text_from_attachment`:
   - TXT/MD: read as text
   - PDF: best-effort extraction
   - PNG/JPG: store file; include warning (OCR is optional and can be a later enhancement)
-- [ ] Implement `rebuild_context_txt(case_id, max_chars)`:
+- [x] Implement `rebuild_context_txt(case_id, max_chars)`:
   - assessment summary (structured → text)
   - concatenated extracted texts
   - truncation strategy + `context_warnings`
-- [ ] Streamlit UI:
+- [x] Streamlit UI:
   - attachments list + extraction status
   - show `context_warnings` clearly
   - “Rebuild context” button (optional; or rebuild on save)
@@ -143,15 +143,15 @@ Goal: implement tool calling + deterministic orchestration (standalone agents an
 - Run metadata saved for Solution and Prototype runs.
 
 **Work**
-- [ ] Implement `log_event(case_id, event)` (append JSONL).
-- [ ] Implement sources persistence:
+- [x] Implement `log_event(case_id, event)` (append JSONL).
+- [x] Implement sources persistence:
   - `append_external_sources`, `load_external_sources`
   - store in `sources/external_sources.json` with stable `source_id`
-- [ ] Implement `web_search` wrapper (Tavily):
+- [x] Implement `web_search` wrapper (Tavily):
   - enforce max calls per run (Solution=2, Prototype=3)
   - enforce `max_results` and `recency_days`
   - log events and persist sources
-- [ ] Implement run meta persistence:
+- [x] Implement run meta persistence:
   - `save_run_meta` to `runs/<type>_<ts>.json`
   - include `web_search_calls`, `sources_used_ids`, `status`, `error`
 
@@ -165,20 +165,20 @@ Goal: implement tool calling + deterministic orchestration (standalone agents an
 - Full LangGraph workflow runs end-to-end and produces outputs + export timestamp.
 
 **Work**
-- [ ] Implement `prompts.py` templates with required fixed headings and “External sources” section.
-- [ ] Implement LangChain agent setup (ChatOpenAI + AgentExecutor):
+- [x] Implement `prompts.py` templates with required fixed headings and “External sources” section.
+- [x] Implement LangChain agent setup (ChatOpenAI + AgentExecutor):
   - tools exposed: `read_case_context`, `web_search`
   - iteration limits and low temperature
-- [ ] Implement `read_case_context` tool (returns assessment + attachments + `context_text` + warnings).
-- [ ] Implement “Run Solution Designer” UI:
+- [x] Implement `read_case_context` tool (returns assessment + attachments + `context_text` + warnings).
+- [x] Implement “Run Solution Designer” UI:
   - executes agent
   - saves `outputs/solution_designer.md`
   - saves run meta
-- [ ] Implement “Run Prototype Builder” UI:
+- [x] Implement “Run Prototype Builder” UI:
   - includes `solution_md` as input context
   - saves `outputs/prototype_builder.md`
   - saves run meta
-- [ ] Implement LangGraph:
+- [x] Implement LangGraph:
   - `schemas.py` PlannerState
   - nodes: `load_case_context`, `run_solution_designer`, `run_prototype_builder`, `build_export_pack` (export node can be stubbed to only set `export_ts` until Phase 4)
   - “Run Workflow” button runs the compiled graph and renders results
@@ -248,4 +248,3 @@ Goal: produce final artifacts, make the app stable for real use, and document it
 - Advanced RAG (chunking/reranking) and eval harness.
 - Multi-user, auth, and remote deployment.
 - Rich run history UI (diff outputs, compare runs, more observability).
-

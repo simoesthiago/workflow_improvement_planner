@@ -20,3 +20,6 @@ class PlannerState(BaseModel):
     export_ts: str | None = None
 
     errors: list[str] = Field(default_factory=list)
+
+    def append_error(self, msg: str) -> None:
+        self.errors.append(msg)
