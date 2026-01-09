@@ -770,82 +770,372 @@ def _build_export_files(
 
 
 def _render_assessment_tab(case_id: str, config: Config) -> None:
-    """Render the Assessment Wizard tab content."""
+    """Render the Assessment Wizard with 9 sections."""
 
     meta = utils.load_case_meta(case_id)
     existing_assessment = utils.load_assessment(case_id)
     defaults = utils.flatten_assessment_for_display(existing_assessment)
 
-    st.caption("Fill the assessment and save. This will also rebuild context.txt.")
-    st.caption(f"Last saved (updated_at): {meta.get('updated_at', '-')}")
+    # Header
+    st.markdown("### Workflow Improvement Assessment")
+    st.caption(
+        "This assessment helps you document a workflow that could benefit from AI assistance. "
+        "By capturing the details of your current process, challenges, and goals, you'll generate a "
+        "comprehensive request that can be used with Claude to design practical solutions tailored to "
+        "your nonprofit's needs."
+    )
+
+    # Section overview
+    st.markdown("**You'll complete 9 sections:**")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("1. Workflow Identification")
+        st.markdown("4. Inputs & Outputs")
+        st.markdown("7. Decision Points")
+    with col2:
+        st.markdown("2. Current State")
+        st.markdown("5. Requirements & Limitations")
+        st.markdown("8. Success Metrics")
+    with col3:
+        st.markdown("3. Challenges")
+        st.markdown("6. Technical Details")
+        st.markdown("9. Additional Context")
+
+    st.divider()
+    st.caption(f"Last saved: {meta.get('updated_at', 'Never')}")
 
     with st.form("assessment_form", clear_on_submit=False):
-        col1, col2 = st.columns(2)
-        with col1:
-            process_name = st.text_input(
-                "Process name / area", value=defaults["process_name"]
+        # Section 1: Workflow Identification
+        st.subheader("1. Workflow Identification")
+        st.caption("Start by identifying the specific workflow you want to improve. Being precise here helps ensure the solution addresses the right process.")
+
+        workflow_name = st.text_input(
+            "Workflow name",
+            value=defaults["workflow_name"],
+            placeholder="e.g., Monthly donor report generation, Grant application review"
+        )
+
+        owning_department = st.text_input(
+            "Owning department or team",
+            value=defaults["owning_department"],
+            placeholder="e.g., Development, Operations, Program delivery"
+        )
+
+        primary_people_involved = st.text_area(
+            "Primary people involved",
+            value=defaults["primary_people_involved"],
+            placeholder="e.g., Development Director, Program Coordinator, Database Manager",
+            help="List roles or specific names of people who participate in this workflow",
+            height=100
+        )
+
+        st.divider()
+
+        # Section 2: Current State
+        st.subheader("2. Current State")
+        st.caption("Document how this workflow operates today. The more detail you provide about each step, the better we can identify opportunities for improvement.")
+
+        current_process_steps = st.text_area(
+            "Current process steps",
+            value=defaults["current_process_steps"],
+            placeholder="Step 1: Export donor data from Salesforce\nStep 2: Clean and format in Excel\nStep 3: Calculate giving trends\nStep 4: Write narrative summary\nStep 5: Format final report in Word\nStep 6: Send to ED for review",
+            help="Be specific: include tools used, handoffs between people, decision points, and waiting periods.",
+            height=200
+        )
+
+        col_2a, col_2b = st.columns(2)
+        with col_2a:
+            trigger = st.text_input(
+                "Trigger",
+                value=defaults["trigger"],
+                placeholder="e.g., First of each month, incoming grant application, board meeting",
+                help="What initiates this workflow?"
             )
-            process_objective = st.text_input(
-                "Process objective", value=defaults["process_objective"]
+            frequency = st.text_input(
+                "Frequency",
+                value=defaults["frequency"],
+                placeholder="e.g., Weekly, monthly, quarterly"
             )
-            current_workflow = st.text_area(
-                "Current workflow description (main steps)",
-                value=defaults["current_workflow"],
-                height=120,
-            )
-            actors = st.text_input("Involved actors/teams", value=defaults["actors"])
-            systems = st.text_input(
-                'Systems used today (accept "I don\'t know")',
-                value=defaults["systems"],
-            )
-        with col2:
-            volume_frequency = st.text_input(
-                "Volume/frequency", value=defaults["volume_frequency"]
-            )
-            slas = st.text_input("SLAs/lead time", value=defaults["slas"])
-            bottlenecks = st.text_area(
-                "Main bottlenecks/pain points",
-                value=defaults["bottlenecks"],
-                height=120,
-            )
-            risks_compliance = st.text_area(
-                "Risks/compliance (if any)",
-                value=defaults["risks_compliance"],
-                height=120,
-            )
-            desired_outcome_kpis = st.text_area(
-                "Desired outcome and KPIs (or estimates)",
-                value=defaults["desired_outcome_kpis"],
-                height=120,
+        with col_2b:
+            time_consumed = st.text_input(
+                "Time consumed",
+                value=defaults["time_consumed"],
+                placeholder="e.g., 8 hours/month"
             )
 
-        submitted = st.form_submit_button("Save assessment")
+        st.divider()
+
+        # Section 3: Challenges
+        st.subheader("3. Challenges")
+        st.caption("Identify the specific pain points in this workflow. Understanding what's not working well helps focus the solution on the areas that will have the most impact.")
+
+        st.markdown("**Primary challenges**")
+        st.caption("Select all that apply")
+
+        primary_challenges = []
+        for challenge in utils.PRIMARY_CHALLENGES_OPTIONS:
+            if st.checkbox(challenge, value=challenge in defaults["primary_challenges"], key=f"challenge_{challenge}"):
+                primary_challenges.append(challenge)
+
+        definition_of_success = st.text_area(
+            "Definition of success",
+            value=defaults["definition_of_success"],
+            placeholder="e.g., Reduce report generation time by 50%, eliminate data entry errors, enable staff to focus on donor relationships instead of data manipulation",
+            help="What would meaningful improvement look like? Consider time saved, quality gains, reduced stress, or increased capacity.",
+            height=120
+        )
+
+        ideal_outcome = st.text_area(
+            "Ideal outcome",
+            value=defaults["ideal_outcome"],
+            placeholder="e.g., Automatic data aggregation with narrative insights, consistent formatting, ready for board presentation with minimal editing",
+            help="If you could redesign this workflow from scratch, what would it accomplish?",
+            height=120
+        )
+
+        st.divider()
+
+        # Section 4: Inputs & Outputs
+        st.subheader("4. Inputs & Outputs")
+        st.caption("Clarify what goes into this workflow and what comes out of it. This helps identify which parts of the process could benefit from AI assistance.")
+
+        workflow_inputs = st.text_area(
+            "Workflow inputs",
+            value=defaults["workflow_inputs"],
+            placeholder="e.g., Donor database exports, previous month's report, giving history spreadsheets, program impact summaries, board meeting notes",
+            help="What information, data, or materials does this workflow require?",
+            height=120
+        )
+
+        workflow_outputs = st.text_area(
+            "Workflow outputs",
+            value=defaults["workflow_outputs"],
+            placeholder="e.g., Monthly donor report (PDF), executive summary, trend analysis charts, donor acknowledgment list",
+            help="What deliverables or results does this workflow produce?",
+            height=120
+        )
+
+        required_output_format = st.text_input(
+            "Required output format",
+            value=defaults["required_output_format"],
+            placeholder="e.g., PDF for board distribution, Excel for data analysis, Word for editing",
+            help="What file format or presentation style is needed?"
+        )
+
+        st.divider()
+
+        # Section 5: Requirements & Limitations
+        st.subheader("5. Requirements & Limitations")
+        st.caption("Document any requirements, limitations, or existing resources that should shape the solution. This helps ensure recommendations are realistic for your organization.")
+
+        quality_standards = st.text_area(
+            "Quality standards",
+            value=defaults["quality_standards"],
+            placeholder="e.g., Must match organizational brand guidelines, requires board-level polish, needs 100% data accuracy for financial figures",
+            help="What requirements must be maintained? (e.g., brand guidelines, data accuracy, compliance)",
+            height=100
+        )
+
+        existing_templates = st.text_area(
+            "Existing templates or formats",
+            value=defaults["existing_templates"],
+            placeholder="e.g., We have a standard report template in Word, a donor letter template, established chart styles",
+            help="Do you have templates or examples that the solution should follow?",
+            height=100
+        )
+
+        current_tools_systems = st.text_input(
+            "Current tools and systems",
+            value=defaults["current_tools_systems"],
+            placeholder="e.g., Google Workspace, Salesforce, Mailchimp, QuickBooks, Slack",
+            help="What software or platforms does your organization already use?"
+        )
+
+        col_5a, col_5b = st.columns(2)
+        with col_5a:
+            time_constraints = st.text_input(
+                "Time constraints",
+                value=defaults["time_constraints"],
+                placeholder="e.g., Report due by 5th of each month, 48-hour turnaround required"
+            )
+        with col_5b:
+            budget_constraints = st.text_input(
+                "Budget and resource constraints",
+                value=defaults["budget_constraints"],
+                placeholder="e.g., Free tools only, limited staff time, no budget for new software"
+            )
+
+        st.divider()
+
+        # Section 6: Technical Details
+        st.subheader("6. Technical Details")
+        st.caption("Document the technical aspects of your workflow. This helps identify which tools and integrations might be most useful.")
+
+        st.markdown("**File types involved**")
+        file_types = []
+        col_6a, col_6b, col_6c = st.columns(3)
+        with col_6a:
+            if st.checkbox("Text documents", value="Text documents" in defaults["file_types"], key="ft_text"):
+                file_types.append("Text documents")
+            if st.checkbox("Email", value="Email" in defaults["file_types"], key="ft_email"):
+                file_types.append("Email")
+            if st.checkbox("Images/media", value="Images/media" in defaults["file_types"], key="ft_images"):
+                file_types.append("Images/media")
+        with col_6b:
+            if st.checkbox("Spreadsheets", value="Spreadsheets" in defaults["file_types"], key="ft_spreadsheets"):
+                file_types.append("Spreadsheets")
+            if st.checkbox("Surveys", value="Surveys" in defaults["file_types"], key="ft_surveys"):
+                file_types.append("Surveys")
+            if st.checkbox("Presentations", value="Presentations" in defaults["file_types"], key="ft_presentations"):
+                file_types.append("Presentations")
+        with col_6c:
+            if st.checkbox("PDFs", value="PDFs" in defaults["file_types"], key="ft_pdfs"):
+                file_types.append("PDFs")
+            if st.checkbox("Database", value="Database" in defaults["file_types"], key="ft_database"):
+                file_types.append("Database")
+            if st.checkbox("Web content", value="Web content" in defaults["file_types"], key="ft_web"):
+                file_types.append("Web content")
+
+        other_file_types = st.text_input(
+            "Other file types (specify)",
+            value=defaults["other_file_types"],
+            placeholder="e.g., JSON, XML, API responses"
+        )
+
+        data_sources = st.text_area(
+            "Data sources",
+            value=defaults["data_sources"],
+            placeholder="e.g., Salesforce for donor data, Excel for financial records, email for correspondence history",
+            help="Does this workflow require gathering information from multiple places?",
+            height=100
+        )
+
+        privacy_security = st.text_area(
+            "Privacy and security considerations",
+            value=defaults["privacy_security"],
+            placeholder="e.g., Donor personal information, financial data, minor information, health data",
+            help="Note any sensitive information that requires special handling",
+            height=100
+        )
+
+        st.divider()
+
+        # Section 7: Decision Points
+        st.subheader("7. Decision Points")
+        st.caption("Understanding where human judgment is required helps identify which parts of the workflow can be supported by AI and which need to remain human-driven.")
+
+        decision_points = st.text_area(
+            "Decision points in the workflow",
+            value=defaults["decision_points"],
+            placeholder="e.g., Determining if a grant application meets our criteria, deciding which donors to prioritize for outreach, choosing communication tone based on donor history",
+            help="Where are judgment calls or evaluations required?",
+            height=120
+        )
+
+        decision_criteria = st.text_area(
+            "Decision criteria",
+            value=defaults["decision_criteria"],
+            placeholder="e.g., We prioritize donors who gave last year but not this year, applications must meet 3 of 5 criteria to advance",
+            help="What rules, rubrics, or experience-based judgment inform these decisions?",
+            height=120
+        )
+
+        st.divider()
+
+        # Section 8: Success Metrics
+        st.subheader("8. Success Metrics")
+        st.caption("Define how you'll know the improved workflow is successful. Clear metrics help evaluate whether changes are delivering real value.")
+
+        st.markdown("**Success metrics**")
+        success_metrics = []
+        for metric in utils.SUCCESS_METRICS_OPTIONS:
+            if st.checkbox(metric, value=metric in defaults["success_metrics"], key=f"metric_{metric}"):
+                success_metrics.append(metric)
+
+        st.divider()
+
+        # Section 9: Additional Context
+        st.subheader("9. Additional Context")
+        st.caption("Share any additional context that might be relevant. This information helps ensure recommendations account for your organization's unique situation.")
+
+        additional_context = st.text_area(
+            "Additional context",
+            value=defaults["additional_context"],
+            placeholder="e.g., We tried automating this last year but the tool was too complex for staff to adopt...",
+            help="Historical context, previous improvement attempts, stakeholder concerns, organizational culture factors",
+            height=120
+        )
+
+        questions_ai_assistance = st.text_area(
+            "Questions about AI assistance",
+            value=defaults["questions_ai_assistance"],
+            placeholder="e.g., How can we ensure data privacy? Is this realistic for our small team?",
+            help="What are you uncertain about or want to understand better?",
+            height=120
+        )
+
+        sample_data_availability = st.text_area(
+            "Sample data availability",
+            value=defaults["sample_data_availability"],
+            placeholder="e.g., I can provide a sample report, anonymized donor list, current template",
+            help="Having examples helps generate more specific recommendations",
+            height=120
+        )
+
+        # Submit button
+        st.divider()
+        submitted = st.form_submit_button("Save Assessment", type="primary")
 
     if submitted:
-        payload = utils.normalize_assessment_input(
-            {
-                "process_name": process_name,
-                "process_objective": process_objective,
-                "current_workflow": current_workflow,
-                "actors": actors,
-                "systems": systems,
-                "volume_frequency": volume_frequency,
-                "slas": slas,
-                "bottlenecks": bottlenecks,
-                "risks_compliance": risks_compliance,
-                "desired_outcome_kpis": desired_outcome_kpis,
-            }
-        )
+        payload = utils.normalize_assessment_input({
+            # Section 1
+            "workflow_name": workflow_name,
+            "owning_department": owning_department,
+            "primary_people_involved": primary_people_involved,
+            # Section 2
+            "current_process_steps": current_process_steps,
+            "trigger": trigger,
+            "frequency": frequency,
+            "time_consumed": time_consumed,
+            # Section 3
+            "primary_challenges": primary_challenges,
+            "definition_of_success": definition_of_success,
+            "ideal_outcome": ideal_outcome,
+            # Section 4
+            "workflow_inputs": workflow_inputs,
+            "workflow_outputs": workflow_outputs,
+            "required_output_format": required_output_format,
+            # Section 5
+            "quality_standards": quality_standards,
+            "existing_templates": existing_templates,
+            "current_tools_systems": current_tools_systems,
+            "time_constraints": time_constraints,
+            "budget_constraints": budget_constraints,
+            # Section 6
+            "file_types": file_types,
+            "other_file_types": other_file_types,
+            "data_sources": data_sources,
+            "privacy_security": privacy_security,
+            # Section 7
+            "decision_points": decision_points,
+            "decision_criteria": decision_criteria,
+            # Section 8
+            "success_metrics": success_metrics,
+            # Section 9
+            "additional_context": additional_context,
+            "questions_ai_assistance": questions_ai_assistance,
+            "sample_data_availability": sample_data_availability,
+        })
+
         try:
             utils.save_assessment(case_id, payload)
             utils.save_assessment_snapshot(case_id, payload)
             ctx = utils.rebuild_context_txt(case_id, max_chars=config.max_context_chars)
-        except Exception as exc:
-            st.error(f"Failed to save assessment: {exc}")
-        else:
             st.success("Assessment saved and context.txt rebuilt.")
             if ctx["warnings"]:
                 st.warning("\n".join(ctx["warnings"]))
+        except Exception as exc:
+            st.error(f"Failed to save assessment: {exc}")
 
     # Attachments section
     st.divider()

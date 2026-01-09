@@ -112,6 +112,56 @@ class ValidationResult(TypedDict):
     run_id: str | None
 
 
+class AssessmentData(TypedDict, total=False):
+    """Assessment data structure with 9 sections and ~30 fields."""
+
+    # Section 1: Workflow Identification
+    workflow_name: str
+    owning_department: str
+    primary_people_involved: str
+
+    # Section 2: Current State
+    current_process_steps: str
+    trigger: str
+    frequency: str
+    time_consumed: str
+
+    # Section 3: Challenges
+    primary_challenges: list[str]  # Multi-select checkboxes
+    definition_of_success: str
+    ideal_outcome: str
+
+    # Section 4: Inputs & Outputs
+    workflow_inputs: str
+    workflow_outputs: str
+    required_output_format: str
+
+    # Section 5: Requirements & Limitations
+    quality_standards: str
+    existing_templates: str
+    current_tools_systems: str
+    time_constraints: str
+    budget_constraints: str
+
+    # Section 6: Technical Details
+    file_types: list[str]  # Multi-select checkboxes
+    other_file_types: str
+    data_sources: str
+    privacy_security: str
+
+    # Section 7: Decision Points
+    decision_points: str
+    decision_criteria: str
+
+    # Section 8: Success Metrics
+    success_metrics: list[str]  # Multi-select checkboxes
+
+    # Section 9: Additional Context
+    additional_context: str
+    questions_ai_assistance: str
+    sample_data_availability: str
+
+
 # ---- Pydantic models for LangGraph state ----
 
 

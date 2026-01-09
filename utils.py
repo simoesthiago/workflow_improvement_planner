@@ -199,18 +199,79 @@ def case_status(case_id: str) -> CaseStatus:
 
 # ---- Assessment persistence ----
 
+# Multi-select field options
+PRIMARY_CHALLENGES_OPTIONS = [
+    "Time-intensive",
+    "Manual or repetitive tasks",
+    "Scattered information",
+    "Quality or consistency issues",
+    "Communication delays",
+    "Scalability limitations",
+    "Knowledge dependencies",
+    "Other",
+]
+
+FILE_TYPES_OPTIONS = [
+    "Text documents",
+    "Email",
+    "Images/media",
+    "Spreadsheets",
+    "Surveys",
+    "Presentations",
+    "PDFs",
+    "Database",
+    "Web content",
+]
+
+SUCCESS_METRICS_OPTIONS = [
+    "Time saved",
+    "Quality improvement",
+    "Consistency",
+    "Staff satisfaction",
+    "Capacity gain",
+    "Error reduction",
+    "Turnaround time",
+    "Other",
+]
 
 ASSESSMENT_FIELDS_ORDER: tuple[str, ...] = (
-    "process_name",
-    "process_objective",
-    "current_workflow",
-    "actors",
-    "systems",
-    "volume_frequency",
-    "slas",
-    "bottlenecks",
-    "risks_compliance",
-    "desired_outcome_kpis",
+    # Section 1: Workflow Identification
+    "workflow_name",
+    "owning_department",
+    "primary_people_involved",
+    # Section 2: Current State
+    "current_process_steps",
+    "trigger",
+    "frequency",
+    "time_consumed",
+    # Section 3: Challenges
+    "primary_challenges",
+    "definition_of_success",
+    "ideal_outcome",
+    # Section 4: Inputs & Outputs
+    "workflow_inputs",
+    "workflow_outputs",
+    "required_output_format",
+    # Section 5: Requirements & Limitations
+    "quality_standards",
+    "existing_templates",
+    "current_tools_systems",
+    "time_constraints",
+    "budget_constraints",
+    # Section 6: Technical Details
+    "file_types",
+    "other_file_types",
+    "data_sources",
+    "privacy_security",
+    # Section 7: Decision Points
+    "decision_points",
+    "decision_criteria",
+    # Section 8: Success Metrics
+    "success_metrics",
+    # Section 9: Additional Context
+    "additional_context",
+    "questions_ai_assistance",
+    "sample_data_availability",
 )
 
 
@@ -354,11 +415,21 @@ def rebuild_context_txt(case_id: str, max_chars: int = 60000) -> ContextResult:
     if assessment:
         parts.append("== Assessment ==")
         for key in ASSESSMENT_FIELDS_ORDER:
-            if key in assessment and assessment.get(key):
-                parts.append(f"{key}: {assessment[key]}")
+            if key in assessment:
+                value = assessment[key]
+                if isinstance(value, list):
+                    # Multi-select: join with commas
+                    formatted_value = ", ".join(value) if value else "(none selected)"
+                    parts.append(f"{key}: {formatted_value}")
+                elif value:
+                    parts.append(f"{key}: {value}")
         for key, value in assessment.items():
             if key not in ASSESSMENT_FIELDS_ORDER:
-                parts.append(f"{key}: {value}")
+                if isinstance(value, list):
+                    formatted_value = ", ".join(str(v) for v in value)
+                    parts.append(f"{key}: {formatted_value}")
+                else:
+                    parts.append(f"{key}: {value}")
     else:
         warnings.append("No assessment found; context uses attachments only.")
 
@@ -393,19 +464,39 @@ def rebuild_context_txt(case_id: str, max_chars: int = 60000) -> ContextResult:
 # ---- Helpers for assessment form ----
 
 
-def normalize_assessment_input(form_data: dict[str, str]) -> dict:
-    """Strip whitespace and keep only known keys."""
-    cleaned: dict[str, str] = {}
+def normalize_assessment_input(form_data: dict) -> dict:
+    """Strip whitespace and keep only known keys. Handle both string and list fields."""
+    cleaned: dict = {}
     for key, value in form_data.items():
         if key in ASSESSMENT_FIELDS_ORDER:
-            cleaned[key] = value.strip()
+            if isinstance(value, list):
+                # Multi-select fields: filter empty strings, keep list
+                filtered = [v.strip() for v in value if isinstance(v, str) and v.strip()]
+                if filtered:
+                    cleaned[key] = filtered
+            elif isinstance(value, str):
+                # Text fields: strip whitespace
+                stripped = value.strip()
+                if stripped:
+                    cleaned[key] = stripped
     return cleaned
 
 
-def flatten_assessment_for_display(assessment: dict | None) -> dict[str, str]:
-    if not assessment:
-        return {k: "" for k in ASSESSMENT_FIELDS_ORDER}
-    return {k: assessment.get(k, "") or "" for k in ASSESSMENT_FIELDS_ORDER}
+def flatten_assessment_for_display(assessment: dict | None) -> dict:
+    """Return all fields with defaults: empty strings for text, empty lists for multi-select."""
+    defaults = {}
+    for key in ASSESSMENT_FIELDS_ORDER:
+        if key in ["primary_challenges", "file_types", "success_metrics"]:
+            defaults[key] = []  # Multi-select fields default to empty list
+        else:
+            defaults[key] = ""  # Text fields default to empty string
+
+    if assessment:
+        for key, value in assessment.items():
+            if key in defaults:
+                defaults[key] = value
+
+    return defaults
 
 
 # ---- Sources and logging ----
