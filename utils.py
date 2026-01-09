@@ -28,6 +28,7 @@ if TYPE_CHECKING:
         ContextResult,
         ExportInfo,
         ExternalSource,
+        IndustryResearchResult,
         WebSearchResponse,
         WebSearchResult,
     )
@@ -602,3 +603,166 @@ def web_search(
         },
     )
     return {"results": results, "source_ids": source_ids, "retrieved_at": utc_now_iso()}
+
+
+# ---- Industry Research ----
+
+
+def conduct_industry_research(
+    case_id: str,
+    assessment: dict,
+    max_queries: int = 4,
+    results_per_query: int = 3,
+    recency_days: int = 365,
+) -> "IndustryResearchResult":
+    """Conduct targeted industry research based on assessment data.
+
+    Performs multiple web searches to gather:
+    - Industry-specific automation tools
+    - Solutions for stated pain points
+    - Compliance/regulatory requirements
+    - Best practices for the process type
+
+    Args:
+        case_id: Case identifier for source persistence
+        assessment: Assessment data dictionary
+        max_queries: Maximum number of search queries
+        results_per_query: Results per query
+        recency_days: How recent results should be
+
+    Returns:
+        IndustryResearchResult with formatted context and source IDs
+    """
+    # Extract key information from assessment
+    process_name = assessment.get("process_name", "business process")
+    process_area = assessment.get("area", "")
+    bottlenecks = assessment.get("bottlenecks", "")
+    systems = assessment.get("systems", "")
+    risks_compliance = assessment.get("risks_compliance", "")
+
+    # Build targeted queries based on assessment
+    queries = _build_research_queries(
+        process_name=process_name,
+        process_area=process_area,
+        bottlenecks=bottlenecks,
+        systems=systems,
+        risks_compliance=risks_compliance,
+        max_queries=max_queries,
+    )
+
+    all_source_ids: list[str] = []
+    research_sections: list[str] = []
+
+    for query in queries:
+        try:
+            result = web_search(
+                case_id=case_id,
+                query=query,
+                max_results=results_per_query,
+                recency_days=recency_days,
+            )
+            all_source_ids.extend(result.get("source_ids", []))
+
+            # Format results for this query
+            if result.get("results"):
+                section = f"### Research: {query}\n"
+                for i, res in enumerate(result["results"], 1):
+                    src_id = result["source_ids"][i - 1] if i <= len(result["source_ids"]) else "unknown"
+                    title = res.get("title", "Untitled")
+                    snippet = res.get("snippet", "")[:200]
+                    section += f"- **[WEB:{src_id}]** {title}\n  {snippet}...\n"
+                research_sections.append(section)
+
+        except Exception as exc:
+            log_event(
+                case_id,
+                {
+                    "event": "industry_research_error",
+                    "query": query,
+                    "error": str(exc),
+                    "timestamp": utc_now_iso(),
+                },
+            )
+            # Continue with other queries even if one fails
+            continue
+
+    # Compile research context
+    if research_sections:
+        research_context = (
+            "# Industry Research Summary\n\n"
+            f"The following research was gathered for **{process_name}**:\n\n"
+            + "\n".join(research_sections)
+        )
+    else:
+        research_context = (
+            "# Industry Research Summary\n\n"
+            "No research results were retrieved. Proceeding with assessment data only."
+        )
+
+    # Log the research completion
+    log_event(
+        case_id,
+        {
+            "event": "industry_research_complete",
+            "case_id": case_id,
+            "queries_executed": queries,
+            "total_sources": len(all_source_ids),
+            "timestamp": utc_now_iso(),
+        },
+    )
+
+    return {
+        "research_context": research_context,
+        "source_ids": all_source_ids,
+        "queries_executed": queries,
+        "total_sources_found": len(all_source_ids),
+    }
+
+
+def _build_research_queries(
+    process_name: str,
+    process_area: str,
+    bottlenecks: str,
+    systems: str,
+    risks_compliance: str,
+    max_queries: int,
+) -> list[str]:
+    """Build targeted research queries from assessment data."""
+    queries = []
+
+    # Query 1: Industry-specific automation tools
+    area_context = f" {process_area}" if process_area else ""
+    queries.append(f"{process_name}{area_context} workflow automation tools best practices 2024")
+
+    # Query 2: Pain point solutions (if bottlenecks described)
+    if bottlenecks and len(bottlenecks.strip()) > 10:
+        # Extract key pain point terms
+        pain_keywords = bottlenecks[:100].replace("\n", " ")
+        queries.append(f"solve {pain_keywords} automation solutions")
+
+    # Query 3: System integrations (if systems mentioned)
+    if systems and systems.lower() not in ["i don't know", "unknown", "none", ""]:
+        queries.append(f"{systems} integration automation API capabilities")
+
+    # Query 4: Compliance/regulatory (if mentioned)
+    if risks_compliance and len(risks_compliance.strip()) > 10:
+        queries.append(f"{process_name} compliance regulatory requirements automation")
+
+    # Ensure we don't exceed max queries
+    return queries[:max_queries]
+
+
+def save_industry_research(case_id: str, research_result: dict) -> Path:
+    """Persist industry research results to disk."""
+    base_dir = case_dir(case_id)
+    research_path = base_dir / "industry_research.json"
+    atomic_write_json(research_path, research_result)
+    return research_path
+
+
+def load_industry_research(case_id: str) -> dict | None:
+    """Load previously saved industry research."""
+    path = case_dir(case_id) / "industry_research.json"
+    if not path.exists():
+        return None
+    return read_json(path)

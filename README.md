@@ -10,11 +10,14 @@ The **Workflow Improvement Planner** is a Streamlit application that guides you 
 
 - **📂 Local Case Management**: Create, manage, and persist cases on your filesystem. No external database required.
 - **📝 Assessment Wizard**: Structured intake form for processes (pain points, actors, systems, SLAs) with attachment support (PDF/TXT/MD).
+- **🔍 Automatic Industry Research**: Pre-gathers relevant tools, best practices, and compliance requirements before analysis.
 - **🤖 Dual-Agent Workflow**:
   - **Solution Designer**: Analyzes the assessment to identify bottlenecks, opportunities, and strategic recommendations.
   - **Prototype Builder**: Generates a technical architectural blueprint based on the solution design.
+- **✅ Consistency Validator**: QA agent that checks alignment between Solution and Prototype outputs, flagging issues.
+- **🔄 Smart Revision**: Automatic revision cycle when critical misalignments are detected.
 - **🌐 Smart Research**: Agents can browse the web (via Tavily) to find relevant integrations, tools, and best practices.
-- **📦 Export Pack**: One-click generation of a downloadable ZIP containing an Executive Brief, Technical Blueprint, and Implementation Plan (Markdown).
+- **📦 Export Pack**: One-click generation of a downloadable ZIP containing an Executive Brief, Technical Blueprint, Implementation Plan, and Validation Report.
 
 ---
 
@@ -58,13 +61,35 @@ The **Workflow Improvement Planner** is a Streamlit application that guides you 
 
 ---
 
-## 📖 Usage Workflow
+## 📖 Enhanced Workflow
+
+The application now features an intelligent, multi-stage workflow:
+
+```
+┌─────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│  Assessment │ ──▶ │ Industry Research│ ──▶ │ Solution Designer│
+└─────────────┘     └──────────────────┘     └──────────────────┘
+                                                      │
+                                                      ▼
+┌─────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│   Export    │ ◀── │    Validator     │ ◀── │ Prototype Builder│
+└─────────────┘     └──────────────────┘     └──────────────────┘
+                           │
+                           ▼ (if critical issues)
+                    ┌──────────────────┐
+                    │     Revision     │
+                    └──────────────────┘
+```
+
+### Step-by-Step
 
 1. **Create a Case**: Open the sidebar, enter a name (e.g., "Vendor Onboarding"), area, and tags.
-2. **Fill Assessment**: Go to the **Assessment Wizard** tab. Describe the current process, upload documentation (PDFs, diagrams), and save.
-3. **Run Solution Designer**: Switch to the **Solution Designer** tab and run the agent. It will analyze your inputs and produce a strategic report.
-4. **Run Prototype Builder**: Switch to the **Prototype Builder** tab. This agent uses the Solution output to create a technical spec.
-5. **Export**: Go to **Export Pack** to download the full report bundle as a ZIP file.
+2. **Fill Assessment**: Go to the **Assessment** tab. Describe the current process, upload documentation, and save.
+3. **Run Industry Research** (automatic or manual): The system searches for relevant tools, best practices, and compliance requirements.
+4. **Run Solution Designer**: The agent analyzes your inputs with research context and produces a strategic report.
+5. **Run Prototype Builder**: Creates a technical spec aligned with the solution recommendations.
+6. **Consistency Validation**: Automatically checks for alignment issues between Solution and Prototype.
+7. **Export**: Download the full report bundle including validation results.
 
 ---
 
@@ -73,12 +98,18 @@ The **Workflow Improvement Planner** is a Streamlit application that guides you 
 The application follows a clean, modular structure powered by **LangGraph** for orchestration and **Streamlit** for the UI.
 
 ```mermaid
-graph LR
-    A[Assessment] -->|Context| B(Solution Designer)
-    B -->|Solution MD| C(Prototype Builder)
-    C -->|Blueprint MD| D[Export Pack]
-    B -.->|Web Search| E[Tavily]
-    C -.->|Web Search| E
+flowchart LR
+    A[Assessment] --> B[Industry Research]
+    B --> C[Solution Designer]
+    C --> D[Prototype Builder]
+    D --> E{Validator}
+    E -->|Approved| F[Export Pack]
+    E -->|Critical Issues| G[Revision]
+    G --> E
+    B -.->|Tavily| H[Web Search]
+    C -.->|Tavily| H
+    D -.->|Tavily| H
+    E -.->|Tavily| H
 ```
 
 ### File Structure
@@ -87,11 +118,20 @@ graph LR
 ├── workflow_planner.py  # Main entrypoint & UI components
 ├── config.py           # Centralized configuration & environment vars
 ├── schemas.py          # Pydantic models & TypedDicts
-├── utils.py            # Persistence, file I/O, & helper functions
-├── prompts.py          # LLM system prompts
+├── utils.py            # Persistence, file I/O, research, & helper functions
+├── prompts.py          # LLM system prompts for all agents
 ├── data/               # Local storage (gitignored)
 └── docs/               # Documentation & PRDs
 ```
+
+### Agents
+
+| Agent | Purpose | Max Searches |
+|-------|---------|--------------|
+| **Industry Research** | Gathers tools, best practices, compliance info | 4 queries |
+| **Solution Designer** | Strategic analysis and recommendations | 2 calls |
+| **Prototype Builder** | Technical blueprint generation | 3 calls |
+| **Consistency Validator** | QA alignment check | 2 calls |
 
 ---
 
@@ -102,10 +142,11 @@ Control the application behavior via `.env`:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `OPENAI_API_KEY` | Required for agents. | - |
-| `TAVILY_API_KEY` | Required for web search. | - |
+| `TAVILY_API_KEY` | Required for web search and research. | - |
 | `OPENAI_MODEL` | LLM model to use. | `gpt-4o-mini` |
 | `MAX_CONTEXT_CHARS` | Limit for input context size. | `60000` |
 | `WEB_SEARCH_MAX_RESULTS` | Max links per search query. | `5` |
+| `WEB_SEARCH_RECENCY_DAYS` | How recent search results should be. | `365` |
 
 ---
 
@@ -114,6 +155,24 @@ Control the application behavior via `.env`:
 - **Local First**: All case data, assessments, and outputs are stored in the `data/` directory on your local machine.
 - **No Cloud Storage**: We do not send your data to any proprietary cloud database.
 - **LLM Privacy**: Data is sent to OpenAI/Tavily only for processing. Refer to their respective privacy policies regarding API usage.
+
+---
+
+## ✅ Validation Report
+
+The Consistency Validator checks:
+
+- **Strategic-Technical Alignment**: Does the prototype implement the solution's recommendations?
+- **Scope Consistency**: Are both documents addressing the same problems?
+- **Feasibility**: Is the technical approach realistic given constraints?
+- **Completeness**: Are there gaps in coverage?
+- **Risk Acknowledgment**: Are solution risks addressed in prototype mitigations?
+- **Timeline Realism**: Do phases match the urgency/complexity?
+
+Results are marked as:
+- ✅ **Aligned**: No issues
+- ⚠️ **Minor Concern**: Noted but not blocking
+- 🚫 **Critical Issue**: Must be addressed
 
 ---
 
@@ -128,4 +187,3 @@ Control the application behavior via `.env`:
 ---
 
 Distributed under the MIT License.
-
