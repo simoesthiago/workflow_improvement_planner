@@ -1,3 +1,14 @@
+"""Utility functions for case management, persistence, and external integrations.
+
+This module provides:
+- Case CRUD operations (create, read, update, delete)
+- Assessment persistence and versioning
+- Attachment handling and text extraction
+- Context building for LLM consumption
+- External source (web search) management
+- Export pack generation
+"""
+
 from __future__ import annotations
 
 import json
@@ -7,8 +18,19 @@ import shutil
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+if TYPE_CHECKING:
+    from schemas import (
+        AttachmentInfo,
+        CaseMeta,
+        CaseStatus,
+        ContextResult,
+        ExportInfo,
+        ExternalSource,
+        WebSearchResponse,
+        WebSearchResult,
+    )
 
 DATA_DIR = Path("data")
 INDEX_PATH = DATA_DIR / "index.json"
@@ -59,13 +81,13 @@ def _ensure_case_dirs(base_dir: Path) -> None:
     (base_dir / "logs").mkdir(parents=True, exist_ok=True)
 
 
-def list_cases() -> list[dict]:
+def list_cases() -> list[CaseMeta]:
+    """List all cases, sorted by most recently updated first."""
     ensure_index()
     index = read_json(INDEX_PATH)
     cases = index.get("cases", [])
     if not isinstance(cases, list):
         raise ValueError("data/index.json is invalid (expected key 'cases' to be a list).")
-    # Most-recently-updated first (fallback to created_at).
     return sorted(
         cases,
         key=lambda c: (c.get("updated_at") or c.get("created_at") or ""),
@@ -83,7 +105,7 @@ def _generate_case_id() -> str:
     return f"case_{date_part}_{suffix}"
 
 
-def create_case(name: str, area: str, tags: list[str], description: str | None) -> dict:
+def create_case(name: str, area: str, tags: list[str], description: str | None) -> CaseMeta:
     ensure_index()
 
     if not name.strip():
@@ -120,7 +142,8 @@ def create_case(name: str, area: str, tags: list[str], description: str | None) 
     return meta
 
 
-def load_case_meta(case_id: str) -> dict:
+def load_case_meta(case_id: str) -> CaseMeta:
+    """Load case metadata from disk."""
     path = case_dir(case_id) / "case_meta.json"
     if not path.exists():
         raise FileNotFoundError(f"case_meta.json not found for case_id={case_id}")
@@ -163,7 +186,8 @@ def delete_case(case_id: str) -> None:
     _write_index(cases)
 
 
-def case_status(case_id: str) -> dict[str, bool]:
+def case_status(case_id: str) -> CaseStatus:
+    """Get status flags for a case."""
     base_dir = case_dir(case_id)
     return {
         "has_assessment": (base_dir / "assessment.json").exists(),
@@ -258,12 +282,13 @@ def save_attachment_text(case_id: str, attachment_name: str, text: str) -> Path:
     return out_path
 
 
-def list_attachments(case_id: str) -> list[dict]:
+def list_attachments(case_id: str) -> list[AttachmentInfo]:
+    """List all attachments for a case."""
     base_dir = case_dir(case_id)
     attachments_dir = base_dir / "attachments"
     if not attachments_dir.exists():
         return []
-    items = []
+    items: list[AttachmentInfo] = []
     for path in sorted(attachments_dir.iterdir()):
         if path.is_file():
             stat = path.stat()
@@ -272,7 +297,9 @@ def list_attachments(case_id: str) -> list[dict]:
                     "name": path.name,
                     "path": str(path),
                     "size_bytes": stat.st_size,
-                    "modified_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+                    "modified_at": datetime.fromtimestamp(
+                        stat.st_mtime, tz=timezone.utc
+                    ).isoformat(),
                 }
             )
     return items
@@ -315,7 +342,7 @@ def extract_text_from_attachment(file_path: str) -> tuple[str, list[str]]:
     return text, warnings
 
 
-def rebuild_context_txt(case_id: str, max_chars: int = 60000) -> dict:
+def rebuild_context_txt(case_id: str, max_chars: int = 60000) -> ContextResult:
     """Build context.txt from assessment + extracted attachment texts."""
     base_dir = case_dir(case_id)
     context_path = base_dir / "context.txt"
@@ -339,7 +366,9 @@ def rebuild_context_txt(case_id: str, max_chars: int = 60000) -> dict:
     if attachments_text_dir.exists():
         for text_path in sorted(attachments_text_dir.iterdir()):
             if text_path.is_file():
-                attachments_texts.append((text_path.name, text_path.read_text(encoding="utf-8", errors="ignore")))
+                attachments_texts.append(
+                    (text_path.name, text_path.read_text(encoding="utf-8", errors="ignore"))
+                )
 
     if attachments_texts:
         parts.append("== Attachments (extracted text) ==")
@@ -391,7 +420,8 @@ def _ensure_sources_file(case_id: str) -> None:
         atomic_write_json(path, [])
 
 
-def load_external_sources(case_id: str) -> list[dict]:
+def load_external_sources(case_id: str) -> list[ExternalSource]:
+    """Load external sources for a case."""
     path = _sources_path(case_id)
     if not path.exists():
         return []
@@ -490,11 +520,12 @@ def make_export_zip(export_dir: str) -> str:
     return str(zip_path)
 
 
-def list_exports(case_id: str) -> list[dict]:
+def list_exports(case_id: str) -> list[ExportInfo]:
+    """List all exports for a case, most recent first."""
     exports_dir = case_dir(case_id) / "exports"
     if not exports_dir.exists():
         return []
-    items: list[dict] = []
+    items: list[ExportInfo] = []
     for path in sorted(exports_dir.iterdir(), reverse=True):
         if path.is_dir():
             zip_path = path.with_suffix(".zip")
@@ -535,13 +566,15 @@ def read_case_context(case_id: str, max_chars: int = 60000) -> dict:
     }
 
 
-def web_search(case_id: str, query: str, max_results: int = 5, recency_days: int = 365) -> dict:
-    """Perform a Tavily search and persist sources. Returns dict with results and source_ids."""
+def web_search(
+    case_id: str, query: str, max_results: int = 5, recency_days: int = 365
+) -> "WebSearchResponse":
+    """Perform a Tavily search and persist sources."""
     from tavily import TavilyClient  # lazy import
 
     client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
     raw = client.search(query=query, max_results=max_results, days=recency_days)
-    results = []
+    results: list[dict] = []
     for item in raw.get("results", []):
         results.append(
             {
@@ -553,7 +586,9 @@ def web_search(case_id: str, query: str, max_results: int = 5, recency_days: int
         )
 
     run_id = f"websearch_{utc_now_iso().replace(':', '-')}"
-    source_ids = append_external_sources(case_id, run_id=run_id, query=query, results=results)
+    source_ids = append_external_sources(
+        case_id, run_id=run_id, query=query, results=results
+    )
     log_event(
         case_id,
         {
