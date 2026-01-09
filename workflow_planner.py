@@ -436,7 +436,7 @@ def _render_assessment_tab(case_id: str, config: Config) -> None:
             )
             actors = st.text_input("Involved actors/teams", value=defaults["actors"])
             systems = st.text_input(
-                "Systems used today (accept "I don't know")",
+                'Systems used today (accept "I don\'t know")',
                 value=defaults["systems"],
             )
         with col2:
