@@ -2000,7 +2000,7 @@ def main() -> None:
             st.title(case_title)
         with col_delete:
             st.markdown("<br>", unsafe_allow_html=True)  # Vertical alignment
-            if st.button("🗑️ Delete Case", key="main_delete_btn", type="secondary", use_container_width=True):
+            if st.button("Delete Case", key="main_delete_btn", type="secondary", use_container_width=True):
                 st.session_state["show_delete_confirm"] = True
         
         # Delete confirmation dialog
