@@ -317,7 +317,7 @@ def _parse_validation_output(output_text: str) -> dict:
     output_lower = output_text.lower()
 
     # Determine if revision is needed
-    needs_revision = "revision needed" in output_lower or "🚫" in output_text
+    needs_revision = "revision needed" in output_lower
     is_valid = not needs_revision
 
     # Determine revision target
@@ -336,28 +336,28 @@ def _parse_validation_output(output_text: str) -> dict:
     issues = []
     lines = output_text.split("\n")
     for line in lines:
-        if "✅" in line:
+        line_lower = line.lower()
+        if "success" in line_lower or "aligned" in line_lower:
             issues.append({
                 "severity": "success",
                 "category": "alignment",
                 "description": line.strip(),
                 "recommendation": None,
             })
-        elif "⚠️" in line:
+        elif "warning" in line_lower or "concern" in line_lower:
             issues.append({
                 "severity": "warning",
                 "category": "concern",
                 "description": line.strip(),
                 "recommendation": None,
             })
-        elif "🚫" in line:
+        elif "critical" in line_lower or "issue" in line_lower:
             issues.append({
                 "severity": "critical",
                 "category": "critical",
                 "description": line.strip(),
                 "recommendation": None,
             })
-
     return {
         "is_valid": is_valid,
         "needs_revision": needs_revision,
@@ -390,7 +390,7 @@ def run_industry_research(case_id: str, assessment: dict) -> dict | None:
             case_id,
             {
                 "event": "industry_research_failed",
-                "error": str(exc),
+            "error": str(exc),
                 "timestamp": utils.utc_now_iso(),
             },
         )
@@ -564,7 +564,7 @@ def run_revision_node(state: PlannerState) -> dict:
 def build_graph() -> StateGraph:
     """Build the enhanced LangGraph workflow.
 
-    Flow: Assessment → Research → Solution → Prototype → Validate → [Revise] → End
+    Flow: Assessment -> Research -> Solution -> Prototype -> Validate -> [Revise] -> End
     """
     graph = StateGraph(PlannerState)
 
@@ -583,7 +583,7 @@ def build_graph() -> StateGraph:
     graph.add_edge("solution", "prototype")
     graph.add_edge("prototype", "validate")
 
-    # Conditional edge: validate → revise or end
+    # Conditional edge: validate -> revise or end
     graph.add_conditional_edges(
         "validate",
         should_revise,
@@ -612,99 +612,155 @@ def build_simple_graph() -> StateGraph:
     return graph
 
 
-def sidebar_case_manager() -> str | None:
-    st.header("Case Manager")
+def _render_landing_page() -> None:
+    """Render the welcome landing page when no case is selected."""
+    st.markdown("# Workflow Improvement Planner")
 
+    st.markdown(
+        """
+        A thoughtful application for assessing business processes, analyzing bottlenecks
+        with AI agents, and generating complete implementation roadmaps. Your data stays
+        local while intelligent agents provide strategic insights.
+        """
+    )
+
+    st.markdown("---")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("### How It Works")
+        st.markdown(
+            """
+            **1. Create a Case**
+            Start by clicking the + icon next to Cases in the sidebar.
+
+            **2. Complete the Assessment**
+            Document your workflow through a structured questionnaire covering
+            process steps, pain points, stakeholders, and success criteria.
+
+            **3. Run the Agents**
+            The Solution Designer analyzes your assessment and identifies
+            opportunities. The Prototype Builder then creates a technical blueprint.
+
+            **4. Export Your Pack**
+            Download a complete package with Executive Brief, Technical Blueprint,
+            and Implementation Plan.
+            """
+        )
+
+    with col2:
+        st.markdown("### Capabilities")
+        st.markdown(
+            """
+            **Case Management**
+            Persist cases locally on your filesystem. No external database required.
+
+            **Assessment Wizard**
+            Structured intake covering pain points, actors, systems, and SLAs
+            with attachment support for PDF, TXT, and Markdown files.
+
+            **Dual-Agent Analysis**
+            Solution Designer identifies strategic opportunities while
+            Prototype Builder generates architectural blueprints.
+
+            **Research Integration**
+            Agents browse the web via Tavily to find relevant tools,
+            integrations, and industry best practices.
+            """
+        )
+
+    st.markdown("---")
+    st.caption("Select or create a case in the sidebar to begin.")
+
+
+def sidebar_case_manager() -> str | None:
     try:
         cases = utils.list_cases()
     except Exception as exc:
         st.error(f"Failed to load cases: {exc}")
         return None
 
-    cases_by_id = {c.get("case_id"): c for c in cases if isinstance(c, dict)}
-    case_id_options = [""] + [c["case_id"] for c in cases if "case_id" in c]
-
     if "selected_case_id" not in st.session_state:
         st.session_state["selected_case_id"] = ""
 
-    selected_case_id = st.selectbox(
-        "Open case",
-        options=case_id_options,
-        index=case_id_options.index(st.session_state["selected_case_id"])
-        if st.session_state["selected_case_id"] in case_id_options
-        else 0,
-        format_func=lambda cid: "-- Select a case --"
-        if cid == ""
-        else f"{cases_by_id.get(cid, {}).get('name', cid)} [{cid}]",
-    )
-    st.session_state["selected_case_id"] = selected_case_id
+    # Cases header with + icon
+    col_title, col_icon = st.columns([4, 1])
+    with col_title:
+        st.markdown("### Cases")
+    with col_icon:
+        if st.button("➕", key="new_case_btn", help="New Case", use_container_width=True):
+            st.session_state["show_new_case_form"] = True
 
-    with st.expander("New case", expanded=False):
+    if st.session_state.get("show_new_case_form", False):
         with st.form("new_case_form", clear_on_submit=True):
-            name = st.text_input("Name*", placeholder="e.g., Vendor onboarding")
-            area = st.text_input("Area", placeholder="e.g., Procurement")
-            tags_raw = st.text_input("Tags (comma-separated)", placeholder="e.g., bpm, automation")
-            description = st.text_area("Description (optional)")
-            submitted = st.form_submit_button("Create case")
+            st.subheader("Create New Case")
+            name = st.text_input("Name*")
+            area = st.text_input("Area")
+
+            # Removed tags and description as requested
+
+            # Add spacing before buttons
+            st.markdown("")
+
+            # Buttons side by side
+            col_submit, col_cancel = st.columns(2)
+            with col_submit:
+                submitted = st.form_submit_button("Create", type="primary", use_container_width=True)
+            with col_cancel:
+                cancelled = st.form_submit_button("Cancel", use_container_width=True)
+
+            if cancelled:
+                 st.session_state["show_new_case_form"] = False
+                 st.rerun()
 
         if submitted:
             try:
-                tags = [t.strip() for t in tags_raw.split(",")] if tags_raw else []
+                # Defaults for removed fields
+                tags = []
+                description = None
+                
                 meta = utils.create_case(
                     name=name,
                     area=area,
                     tags=tags,
-                    description=description if description.strip() else None,
+                    description=description,
                 )
             except Exception as exc:
                 st.error(f"Failed to create case: {exc}")
             else:
                 st.success(f"Created case: {meta['case_id']}")
                 st.session_state["selected_case_id"] = meta["case_id"]
+                st.session_state["show_new_case_form"] = False
                 st.rerun()
 
-    if selected_case_id:
-        try:
-            meta = utils.load_case_meta(selected_case_id)
-            status = utils.case_status(selected_case_id)
-        except Exception as exc:
-            st.error(f"Failed to load case details: {exc}")
-        else:
-            st.caption(f"case_id: {meta.get('case_id')}")
-            st.caption(f"created_at: {meta.get('created_at')}")
-            st.caption(f"updated_at: {meta.get('updated_at')}")
-            st.caption(f"area: {meta.get('area')}")
-            st.caption(f"tags: {', '.join(meta.get('tags') or [])}")
+    # Filter cases
+    filtered_cases = cases
+    # if search_query:
+    #     q = search_query.lower()
+    #     filtered_cases = [
+    #         c for c in cases 
+    #         if q in c.get("name", "").lower() 
+    #         or q in c.get("case_id", "").lower() 
+    #         or q in " ".join(c.get("tags", [])).lower()
+    #     ]
 
-            st.divider()
-            st.subheader("Status")
-            st.write(
-                {
-                    "has_assessment": status["has_assessment"],
-                    "has_solution_output": status["has_solution_output"],
-                    "has_prototype_output": status["has_prototype_output"],
-                }
-            )
+    # List cases as buttons
+    for c in filtered_cases:
+        case_id = c.get("case_id")
+        name = c.get("name", case_id)
 
-            with st.expander("Danger zone", expanded=False):
-                confirm = st.checkbox(
-                    "I understand this will delete the case folder from disk.",
-                    value=False,
-                )
-                if st.button(
-                    "Delete case",
-                    type="primary",
-                    disabled=not confirm,
-                ):
-                    try:
-                        utils.delete_case(selected_case_id)
-                    except Exception as exc:
-                        st.error(f"Failed to delete case: {exc}")
-                    else:
-                        st.success("Case deleted.")
-                        st.session_state["selected_case_id"] = ""
-                        st.rerun()
+        # Highlight selected case
+        if st.button(
+            name,
+            key=f"case_btn_{case_id}",
+            use_container_width=True,
+            type="secondary" if st.session_state["selected_case_id"] != case_id else "primary"
+        ):
+            st.session_state["selected_case_id"] = case_id
+            st.rerun()
 
+    selected_case_id = st.session_state["selected_case_id"]
     return selected_case_id if selected_case_id else None
 
 
@@ -777,7 +833,6 @@ def _render_assessment_tab(case_id: str, config: Config) -> None:
     defaults = utils.flatten_assessment_for_display(existing_assessment)
 
     # Header
-    st.markdown("### Workflow Improvement Assessment")
     st.caption(
         "This assessment helps you document a workflow that could benefit from AI assistance. "
         "By capturing the details of your current process, challenges, and goals, you'll generate a "
@@ -1190,12 +1245,12 @@ def _render_assessment_tab(case_id: str, config: Config) -> None:
 def _render_solution_tab(case_id: str, config: Config) -> None:
     """Render the Solution Designer tab content."""
     # Industry Research Section
-    st.subheader("📚 Industry Research")
+    st.subheader("Industry Research")
     existing_research = utils.load_industry_research(case_id)
 
     if existing_research:
         with st.expander(
-            f"✅ Research completed ({existing_research.get('total_sources_found', 0)} sources)",
+            f"Research completed ({existing_research.get('total_sources_found', 0)} sources)",
             expanded=False,
         ):
             st.markdown(existing_research.get("research_context", "No content"))
@@ -1206,7 +1261,7 @@ def _render_solution_tab(case_id: str, config: Config) -> None:
     col1, col2 = st.columns(2)
     with col1:
         if st.button(
-            "🔍 Run Industry Research",
+            "Run Industry Research",
             disabled=not config.has_tavily_key,
             help="Searches for relevant tools, best practices, and compliance info",
         ):
@@ -1225,7 +1280,7 @@ def _render_solution_tab(case_id: str, config: Config) -> None:
     st.divider()
 
     # Solution Designer Section
-    st.subheader("💡 Solution Designer Output")
+    st.subheader("Solution Designer Output")
     latest_solution = utils.load_latest_output(case_id, "solution_designer")
     if latest_solution:
         st.markdown(latest_solution)
@@ -1237,7 +1292,7 @@ def _render_solution_tab(case_id: str, config: Config) -> None:
 
     with col2:
         if st.button(
-            "▶️ Run Solution Designer",
+            "Run Solution Designer",
             type="primary",
             disabled=not config.has_openai_key,
         ):
@@ -1260,7 +1315,7 @@ def _render_prototype_tab(case_id: str, config: Config) -> None:
     """Render the Prototype Builder tab content."""
     latest_prototype = utils.load_latest_output(case_id, "prototype_builder")
 
-    st.subheader("🏗️ Prototype Builder Output")
+    st.subheader("Prototype Builder Output")
     if latest_prototype:
         st.markdown(latest_prototype)
     else:
@@ -1271,10 +1326,10 @@ def _render_prototype_tab(case_id: str, config: Config) -> None:
 
     solution_md = utils.load_latest_output(case_id, "solution_designer")
     if not solution_md:
-        st.warning("⚠️ Run Solution Designer first for best results.")
+        st.warning("Run Solution Designer first for best results.")
 
     if st.button(
-        "▶️ Run Prototype Builder",
+            "Run Prototype Builder",
         type="primary",
         disabled=not config.has_openai_key,
     ):
@@ -1297,16 +1352,16 @@ def _render_prototype_tab(case_id: str, config: Config) -> None:
 
     # Validation Section
     st.divider()
-    st.subheader("✅ Consistency Validation")
+    st.subheader("Consistency Validation")
 
     validation_report = utils.load_latest_output(case_id, "validation_report")
 
     if validation_report:
         # Parse for display
-        if "APPROVED" in validation_report.upper() or "🚫" not in validation_report:
-            st.success("Validation Status: **APPROVED** ✅")
+        if "APPROVED" in validation_report.upper() or "critical" not in validation_report.lower():
+            st.success("Validation Status: APPROVED")
         else:
-            st.warning("Validation Status: **REVISION RECOMMENDED** ⚠️")
+            st.warning("Validation Status: REVISION RECOMMENDED")
 
         with st.expander("View Validation Report", expanded=False):
             st.markdown(validation_report)
@@ -1314,7 +1369,7 @@ def _render_prototype_tab(case_id: str, config: Config) -> None:
         st.info("No validation report yet. Run validation after both agents complete.")
 
     if st.button(
-        "🔍 Run Consistency Validator",
+        "Run Consistency Validator",
         disabled=not (config.has_openai_key and solution_md and latest_prototype),
         help="Checks alignment between Solution and Prototype outputs",
     ):
@@ -1342,25 +1397,25 @@ def _render_export_tab(case_id: str) -> None:
     col1, col2, col3 = st.columns(3)
     with col1:
         if solution_md:
-            st.success("✅ Solution Designer")
+            st.success("Solution Designer")
         else:
-            st.warning("⏳ Solution Designer")
+            st.warning("Solution Designer")
     with col2:
         if prototype_md:
-            st.success("✅ Prototype Builder")
+            st.success("Prototype Builder")
         else:
-            st.warning("⏳ Prototype Builder")
+            st.warning("Prototype Builder")
     with col3:
         if validation_md:
-            st.success("✅ Validation Complete")
+            st.success("Validation Complete")
         else:
-            st.info("ℹ️ Validation (optional)")
+            st.info("Validation (optional)")
 
     if not solution_md or not prototype_md:
         st.warning("Run Solution Designer and Prototype Builder before exporting.")
 
     if st.button(
-        "📦 Generate Export Pack",
+        "Generate Export Pack",
         type="primary",
         disabled=not (solution_md and prototype_md),
     ):
@@ -1371,7 +1426,7 @@ def _render_export_tab(case_id: str) -> None:
         st.success(f"Export generated: {export_dir}")
         with open(zip_path, "rb") as f:
             st.download_button(
-                "⬇️ Download Export ZIP",
+                "Download Export ZIP",
                 data=f.read(),
                 file_name=Path(zip_path).name,
                 mime="application/zip",
@@ -1400,14 +1455,14 @@ def _render_export_tab(case_id: str) -> None:
 def _render_workflow_section(case_id: str, config: Config) -> None:
     """Render the full workflow execution section."""
     st.caption(
-        "Enhanced workflow: Assessment → Research → Solution → Prototype → Validation → Export"
+        "Enhanced workflow: Assessment -> Research -> Solution -> Prototype -> Validation -> Export"
     )
 
     col1, col2 = st.columns(2)
 
     with col1:
         if st.button(
-            "🚀 Run Full Enhanced Workflow",
+            "Run Full Enhanced Workflow",
             type="primary",
             disabled=not config.has_openai_key,
             help="Runs research, both agents, and validation automatically",
@@ -1424,7 +1479,7 @@ def _render_workflow_section(case_id: str, config: Config) -> None:
                 progress.progress(100, text="Workflow complete!")
 
                 if result.get("prototype_md") or result.get("solution_md"):
-                    st.success("✅ Workflow completed successfully!")
+                    st.success("Workflow completed successfully!")
 
                     # Show summary
                     validation = result.get("validation_result", {})
@@ -1434,9 +1489,9 @@ def _render_workflow_section(case_id: str, config: Config) -> None:
                         warning_count = sum(1 for i in issues if i.get("severity") == "warning")
                         critical_count = sum(1 for i in issues if i.get("severity") == "critical")
                         st.info(
-                            f"Validation: ✅ {success_count} aligned, "
-                            f"⚠️ {warning_count} concerns, "
-                            f"🚫 {critical_count} critical"
+                            f"Validation: {success_count} aligned, "
+                            f"{warning_count} concerns, "
+                            f"{critical_count} critical"
                         )
 
                     with st.expander("Solution Designer Output", expanded=False):
@@ -1453,7 +1508,7 @@ def _render_workflow_section(case_id: str, config: Config) -> None:
 
     with col2:
         if st.button(
-            "⚡ Run Simple Workflow (No Research/Validation)",
+            "Run Simple Workflow (No Research/Validation)",
             type="secondary",
             disabled=not config.has_openai_key,
             help="Original workflow without research and validation",
@@ -1473,58 +1528,534 @@ def _render_workflow_section(case_id: str, config: Config) -> None:
 def main() -> None:
     st.set_page_config(page_title="Workflow Improvement Planner", layout="wide")
 
+    # Inject custom CSS - Editorial Refined aesthetic
+    st.markdown(
+        """
+        <style>
+        /* ═══════════════════════════════════════════════════════════════
+           EDITORIAL REFINED THEME
+           A sophisticated, warm design with distinctive typography
+           and thoughtful micro-interactions
+           ═══════════════════════════════════════════════════════════════ */
+
+        /* Import distinctive fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
+        
+        /* Import Material Icons for Streamlit icons */
+        @import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+
+        /* CSS Variables for consistency */
+        :root {
+            --font-display: 'Cormorant Garamond', Georgia, serif;
+            --font-body: 'DM Sans', -apple-system, sans-serif;
+            --color-ink: #1a1a1a;
+            --color-ink-light: #4a4a4a;
+            --color-paper: #faf9f7;
+            --color-paper-warm: #f5f3ef;
+            --color-accent: #c45d3a;
+            --color-accent-hover: #a84d2f;
+            --color-accent-soft: rgba(196, 93, 58, 0.08);
+            --color-border: #e8e4df;
+            --color-border-hover: #d4cfc8;
+            --shadow-sm: 0 1px 2px rgba(26, 26, 26, 0.04);
+            --shadow-md: 0 4px 12px rgba(26, 26, 26, 0.06);
+            --shadow-lg: 0 8px 24px rgba(26, 26, 26, 0.08);
+            --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Global typography */
+        .stApp {
+            font-family: var(--font-body) !important;
+            background: linear-gradient(180deg, var(--color-paper) 0%, var(--color-paper-warm) 100%) !important;
+        }
+
+        /* All headings use display font */
+        h1, h2, h3, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+            font-family: var(--font-display) !important;
+            font-weight: 600 !important;
+            color: var(--color-ink) !important;
+            letter-spacing: -0.02em !important;
+        }
+
+        h1, .stMarkdown h1 {
+            font-size: 2.5rem !important;
+            line-height: 1.1 !important;
+        }
+
+        h2, .stMarkdown h2 {
+            font-size: 1.75rem !important;
+        }
+
+        h3, .stMarkdown h3 {
+            font-size: 1.35rem !important;
+        }
+
+        /* Body text refinement */
+        p, span, label, .stMarkdown p {
+            font-family: var(--font-body) !important;
+            color: var(--color-ink-light) !important;
+            line-height: 1.6 !important;
+        }
+
+        /* Material Icons - ensure icons render correctly */
+        [data-testid="stIconMaterial"],
+        .stIconMaterial,
+        span[data-testid="stIconMaterial"] {
+            font-family: 'Material Icons' !important;
+            font-weight: normal !important;
+            font-style: normal !important;
+            font-size: 24px !important;
+            line-height: 1 !important;
+            letter-spacing: normal !important;
+            text-transform: none !important;
+            display: inline-block !important;
+            white-space: nowrap !important;
+            word-wrap: normal !important;
+            direction: ltr !important;
+            -webkit-font-feature-settings: 'liga' !important;
+            -webkit-font-smoothing: antialiased !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           HEADER/TOOLBAR STYLING
+           ═══════════════════════════════════════════════════════════════ */
+
+        /* Header/Toolbar - same background as main content */
+        header[data-testid="stHeader"],
+        .stAppHeader,
+        [data-testid="stToolbar"],
+        .stAppToolbar {
+            background: var(--color-paper) !important;
+            border-bottom: 1px solid var(--color-border) !important;
+        }
+
+        /* Main content area background */
+        [data-testid="stMainBlockContainer"] {
+            background: var(--color-paper) !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           SIDEBAR STYLING
+           ═══════════════════════════════════════════════════════════════ */
+
+        section[data-testid="stSidebar"] {
+            background: var(--color-paper) !important;
+            border-right: 1px solid var(--color-border) !important;
+        }
+
+        section[data-testid="stSidebar"] h3 {
+            font-family: var(--font-display) !important;
+            font-size: 1.1rem !important;
+            font-weight: 600 !important;
+            color: var(--color-ink) !important;
+            letter-spacing: 0.05em !important;
+            text-transform: uppercase !important;
+            margin-bottom: 0.75rem !important;
+        }
+
+        /* Sidebar buttons - left aligned */
+        section[data-testid="stSidebar"] button {
+            display: flex !important;
+            justify-content: flex-start !important;
+            align-items: center !important;
+            width: 100% !important;
+            text-align: left !important;
+            font-family: var(--font-body) !important;
+            transition: all var(--transition-fast) !important;
+        }
+
+        section[data-testid="stSidebar"] button > div {
+            display: flex !important;
+            justify-content: flex-start !important;
+            align-items: center !important;
+            width: 100% !important;
+        }
+
+        /* Form buttons centered */
+        section[data-testid="stSidebar"] [data-testid="stForm"] button {
+            justify-content: center !important;
+            text-align: center !important;
+        }
+
+        section[data-testid="stSidebar"] [data-testid="stForm"] button > div {
+            justify-content: center !important;
+        }
+
+        /* Toggle and New Case buttons */
+        section[data-testid="stSidebar"] button[kind="headerNoPadding"],
+        button[data-testid="stExpandSidebarButton"] {
+            width: 36px !important;
+            height: 36px !important;
+            padding: 6px !important;
+            margin-left: auto !important;
+            margin-right: 4px !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            border-radius: 8px !important;
+        }
+
+        section[data-testid="stSidebar"] div[class*="key-new_case_btn"] button {
+            justify-content: center !important;
+            align-items: center !important;
+            width: 36px !important;
+            height: 36px !important;
+            padding: 6px !important;
+            margin-left: auto !important;
+            margin-right: 4px !important;
+            border-radius: 8px !important;
+            background: var(--color-accent-soft) !important;
+            border: 1px solid transparent !important;
+        }
+
+        section[data-testid="stSidebar"] div[class*="key-new_case_btn"] button:hover {
+            background: var(--color-accent) !important;
+            color: white !important;
+            transform: scale(1.05) !important;
+        }
+
+        section[data-testid="stSidebar"] div[class*="key-new_case_btn"] button:hover * {
+            color: white !important;
+        }
+
+        section[data-testid="stSidebar"] div[class*="key-new_case_btn"] button > div,
+        section[data-testid="stSidebar"] button[kind="headerNoPadding"] > div,
+        button[data-testid="stExpandSidebarButton"] > div {
+            justify-content: center !important;
+            align-items: center !important;
+            width: auto !important;
+        }
+
+        /* Secondary buttons (Case List) */
+        section[data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"] {
+            border: 1px solid transparent !important;
+            background-color: transparent !important;
+            color: var(--color-ink-light) !important;
+            border-radius: 8px !important;
+            padding: 0.6rem 0.75rem !important;
+        }
+
+        section[data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"]:hover {
+            background-color: var(--color-accent-soft) !important;
+            border: 1px solid var(--color-border) !important;
+            color: var(--color-ink) !important;
+            transform: translateX(4px) !important;
+        }
+
+        /* Primary buttons (Selected Case) */
+        section[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"] {
+            background: linear-gradient(135deg, var(--color-ink) 0%, #2d2d2d 100%) !important;
+            color: var(--color-paper) !important;
+            border: none !important;
+            border-radius: 8px !important;
+            box-shadow: var(--shadow-sm) !important;
+        }
+
+        section[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"] * {
+            color: var(--color-paper) !important;
+        }
+
+        section[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"]:hover {
+            box-shadow: var(--shadow-md) !important;
+            transform: translateX(4px) !important;
+        }
+
+        section[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"]:hover * {
+            color: var(--color-paper) !important;
+        }
+
+        /* Case buttons spacing */
+        section[data-testid="stSidebar"] button[key^="case_btn_"] {
+            margin-bottom: 0.25rem !important;
+            margin-top: 0 !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+        }
+
+        section[data-testid="stSidebar"] button[key^="case_btn_"] p {
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            margin: 0 !important;
+            font-weight: 500 !important;
+        }
+
+        section[data-testid="stSidebar"] .stVerticalBlock > div {
+            gap: 0.15rem !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           MAIN CONTENT STYLING
+           ═══════════════════════════════════════════════════════════════ */
+
+        /* Cards and containers */
+        [data-testid="stForm"] {
+            background: white !important;
+            border: 1px solid var(--color-border) !important;
+            border-radius: 12px !important;
+            padding: 1.5rem !important;
+            box-shadow: var(--shadow-sm) !important;
+            transition: box-shadow var(--transition-smooth) !important;
+        }
+
+        [data-testid="stForm"]:hover {
+            box-shadow: var(--shadow-md) !important;
+        }
+
+        /* Input fields */
+        .stTextInput input, .stTextArea textarea, .stSelectbox select {
+            font-family: var(--font-body) !important;
+            border: 1px solid var(--color-border) !important;
+            border-radius: 8px !important;
+            transition: all var(--transition-fast) !important;
+            background: var(--color-paper) !important;
+        }
+
+        .stTextInput input:focus, .stTextArea textarea:focus {
+            border-color: var(--color-accent) !important;
+            box-shadow: 0 0 0 3px var(--color-accent-soft) !important;
+        }
+
+        /* Primary buttons - unified dark orange styling for all primary buttons */
+        /* Sidebar primary buttons use more specific selector and will override this */
+        button[data-testid="stBaseButton-primaryFormSubmit"],
+        button[kind="primaryFormSubmit"],
+        button[data-testid="stBaseButton-primary"] {
+            background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-hover) 100%) !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 8px !important;
+            font-family: var(--font-body) !important;
+            font-weight: 600 !important;
+            padding: 0.6rem 1.5rem !important;
+            box-shadow: var(--shadow-sm) !important;
+            transition: all var(--transition-fast) !important;
+        }
+
+        button[data-testid="stBaseButton-primaryFormSubmit"] *,
+        button[kind="primaryFormSubmit"] *,
+        button[data-testid="stBaseButton-primary"] * {
+            color: white !important;
+        }
+
+        button[data-testid="stBaseButton-primaryFormSubmit"]:hover,
+        button[kind="primaryFormSubmit"]:hover,
+        button[data-testid="stBaseButton-primary"]:hover {
+            box-shadow: var(--shadow-md) !important;
+            transform: translateY(-1px) !important;
+        }
+
+        button[data-testid="stBaseButton-primaryFormSubmit"]:hover *,
+        button[kind="primaryFormSubmit"]:hover *,
+        button[data-testid="stBaseButton-primary"]:hover * {
+            color: white !important;
+        }
+
+        /* Secondary form submit buttons (Cancel) */
+        button[data-testid="stBaseButton-secondaryFormSubmit"],
+        button[kind="secondaryFormSubmit"] {
+            height: 45px !important;
+        }
+
+        /* Secondary/Cancel buttons */
+        button[data-testid="stBaseButton-secondary"] {
+            border: 1px solid var(--color-border) !important;
+            background: white !important;
+            color: var(--color-ink-light) !important;
+            border-radius: 8px !important;
+            font-family: var(--font-body) !important;
+            transition: all var(--transition-fast) !important;
+            height: 45px !important;
+        }
+
+        button[data-testid="stBaseButton-secondary"]:hover {
+            border-color: var(--color-border-hover) !important;
+            background: var(--color-paper-warm) !important;
+            color: var(--color-ink) !important;
+        }
+
+        /* Tabs styling */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 0 !important;
+            border-bottom: 1px solid var(--color-border) !important;
+        }
+
+        .stTabs [data-baseweb="tab"] {
+            font-family: var(--font-body) !important;
+            font-weight: 500 !important;
+            color: var(--color-ink-light) !important;
+            border-bottom: 2px solid transparent !important;
+            transition: all var(--transition-fast) !important;
+            padding: 0.75rem 1.25rem !important;
+        }
+
+        .stTabs [data-baseweb="tab"]:hover {
+            color: var(--color-ink) !important;
+        }
+
+        .stTabs [aria-selected="true"] {
+            color: var(--color-accent) !important;
+            border-bottom: 2px solid var(--color-accent) !important;
+        }
+
+        /* Expanders */
+        .streamlit-expanderHeader {
+            font-family: var(--font-body) !important;
+            font-weight: 600 !important;
+            color: var(--color-ink) !important;
+            border-radius: 8px !important;
+            transition: background var(--transition-fast) !important;
+        }
+
+        .streamlit-expanderHeader:hover {
+            background: var(--color-accent-soft) !important;
+        }
+
+        /* Success/Warning/Error messages */
+        .stSuccess, .stWarning, .stError, .stInfo {
+            border-radius: 8px !important;
+            font-family: var(--font-body) !important;
+        }
+
+        /* Dividers */
+        hr {
+            border: none !important;
+            height: 1px !important;
+            background: var(--color-border) !important;
+            margin: 1.5rem 0 !important;
+        }
+
+        /* Checkboxes */
+        .stCheckbox label {
+            font-family: var(--font-body) !important;
+        }
+
+        /* Captions */
+        .stCaption, [data-testid="stCaption"] {
+            font-family: var(--font-body) !important;
+            font-size: 0.85rem !important;
+            color: var(--color-ink-light) !important;
+            opacity: 0.8 !important;
+        }
+
+        /* Progress bar */
+        .stProgress > div > div {
+            background: var(--color-accent) !important;
+        }
+
+        /* Spinner */
+        .stSpinner > div {
+            border-color: var(--color-accent) transparent transparent transparent !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           ANIMATIONS
+           ═══════════════════════════════════════════════════════════════ */
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .stMarkdown, [data-testid="stForm"], .stTabs {
+            animation: fadeInUp 0.4s ease-out !important;
+        }
+
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     config = load_config()
     utils.ensure_index()
 
-    st.title("🔄 Workflow Improvement Planner")
-    st.caption(
-        "Enhanced agentic workflow: Assessment → Industry Research → "
-        "Solution Designer → Prototype Builder → Consistency Validation → Export"
-    )
+    # Title is now handled by _render_landing_page or hidden when in a case
 
     with st.sidebar:
         selected_case_id = sidebar_case_manager()
 
-        st.divider()
-        _render_environment_status()
+        # st.divider()
 
-    assessment_tab, solution_tab, prototype_tab, export_tab = st.tabs(
-        ["📝 Assessment", "💡 Solution Designer", "🏗️ Prototype Builder", "📦 Export"]
-    )
+    if not selected_case_id:
+        _render_landing_page()
+    else:
+        # Load case name for title
+        try:
+            case_meta = utils.load_case_meta(selected_case_id)
+            case_title = case_meta.get("name", selected_case_id)
+        except Exception:
+            case_title = selected_case_id
+        
+        # Title with delete button
+        col_title, col_delete = st.columns([5, 1])
+        with col_title:
+            st.title(case_title)
+        with col_delete:
+            st.markdown("<br>", unsafe_allow_html=True)  # Vertical alignment
+            if st.button("🗑️ Delete Case", key="main_delete_btn", type="secondary", use_container_width=True):
+                st.session_state["show_delete_confirm"] = True
+        
+        # Delete confirmation dialog
+        if st.session_state.get("show_delete_confirm", False):
+            try:
+                meta = utils.load_case_meta(selected_case_id)
+                case_name = meta.get("name", selected_case_id)
+            except Exception:
+                case_name = selected_case_id
+            
+            st.warning(f"Delete case '{case_name}'? This action cannot be undone.")
+            col_yes, col_no = st.columns(2)
+            with col_yes:
+                if st.button("Yes, Delete", key="confirm_delete_yes", type="primary", use_container_width=True):
+                    try:
+                        utils.delete_case(selected_case_id)
+                        st.session_state["selected_case_id"] = ""
+                        st.session_state["show_delete_confirm"] = False
+                        st.success("Case deleted successfully.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Failed to delete case: {exc}")
+                        st.session_state["show_delete_confirm"] = False
+            with col_no:
+                if st.button("Cancel", key="confirm_delete_no", use_container_width=True):
+                    st.session_state["show_delete_confirm"] = False
+                    st.rerun()
+        
+        st.caption(
+            "Enhanced agentic workflow: Assessment -> Industry Research -> "
+            "Solution Designer -> Prototype Builder -> Consistency Validation -> Export"
+        )
+        
+        assessment_tab, solution_tab, prototype_tab, export_tab = st.tabs(
+            ["Assessment", "Solution Designer", "Prototype Builder", "Export"]
+        )
 
-    with assessment_tab:
-        st.subheader("Assessment Wizard")
-        if not selected_case_id:
-            st.info("Select or create a case in the sidebar to begin.")
-        else:
+        with assessment_tab:
+            st.subheader("Assessment Wizard")
             _render_assessment_tab(selected_case_id, config)
 
-    with solution_tab:
-        st.subheader("Solution Designer (Agent 1)")
-        if not selected_case_id:
-            st.info("Select or create a case in the sidebar to begin.")
-        else:
+        with solution_tab:
+            st.subheader("Solution Designer (Agent 1)")
             _render_solution_tab(selected_case_id, config)
 
-    with prototype_tab:
-        st.subheader("Prototype Builder (Agent 2)")
-        if not selected_case_id:
-            st.info("Select or create a case in the sidebar to begin.")
-        else:
+        with prototype_tab:
+            st.subheader("Prototype Builder (Agent 2)")
             _render_prototype_tab(selected_case_id, config)
 
-    with export_tab:
-        st.subheader("Export Pack")
-        if not selected_case_id:
-            st.info("Select or create a case in the sidebar to begin.")
-        else:
+        with export_tab:
+            st.subheader("Export Pack")
             _render_export_tab(selected_case_id)
 
-    st.divider()
-    st.subheader("Run full workflow (LangGraph)")
-    if not selected_case_id:
-        st.info("Select or create a case to run the workflow.")
-    else:
+        st.divider()
+        st.subheader("Run full workflow (LangGraph)")
         _render_workflow_section(selected_case_id, config)
 
 

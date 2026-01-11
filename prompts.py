@@ -115,9 +115,9 @@ One paragraph summarizing the overall alignment quality.
 ## Alignment Check
 
 For each area, use these markers:
-- ✅ **Aligned**: Good alignment, no issues
-- ⚠️ **Minor Concern**: Noted but not blocking
-- 🚫 **Critical Issue**: Must be addressed before delivery
+- **Aligned**: Good alignment, no issues
+- **Minor Concern**: Noted but not blocking
+- **Critical Issue**: Must be addressed before delivery
 
 ### Areas to Check:
 
